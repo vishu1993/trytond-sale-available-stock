@@ -36,7 +36,9 @@ class SaleLine:
         fields.Char('Sale State'), 'get_sale_state'
     )
 
-    @fields.depends('_parent_sale.warehouse', 'product', 'type')
+    @fields.depends(
+        '_parent_sale.warehouse', '_parent_sale.sale_date',
+        'product', 'type')
     def on_change_with_available_stock_qty(self, name=None):
         """
         Returns the available stock to process a Sale
@@ -53,13 +55,21 @@ class SaleLine:
             # won't be there.
             self.warehouse = Location(self.get_warehouse(None))
 
+        # If a date is specified on sale, use that. If not, use the
+        # current date.
+        date = self.sale.sale_date or Date.today()
+
+        # If the sales person is taking an order for a date in the past
+        # (which tryton allows), the stock cannot be of the past, but of
+        # the current date.
+        date = max(date, Date.today())
+
         if self.type == 'line' and self.product and self.warehouse:
             with Transaction().set_context(
-                locations=[self.warehouse.id],  # warehouse of the line
-                stock_skip_warehouse=True,
-                stock_date_end=Date.today(),
-                stock_assign=True
-            ):
+                    locations=[self.warehouse.id],  # warehouse of the line
+                    stock_skip_warehouse=True,      # quantity of storage only
+                    stock_date_end=date,            # Stock as of sale date
+                    stock_assign=True):             # Exclude Assigned
                 return self.product.quantity
 
     def get_sale_state(self, name):
