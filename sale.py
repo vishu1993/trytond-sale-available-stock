@@ -41,11 +41,21 @@ class SaleLine:
         """
         Returns the available stock to process a Sale
         """
+        Location = Pool().get('stock.location')
         Date = Pool().get('ir.date')
 
-        if self.type == 'line' and self.product and self.sale.warehouse:
+        try:
+            self.warehouse
+        except AttributeError:
+            # On change will not have the warehouse set since its constructed
+            # from a dictionary of changes rather than the database active
+            # record. The warehouse on line is never displayed on view and
+            # won't be there.
+            self.warehouse = Location(self.get_warehouse(None))
+
+        if self.type == 'line' and self.product and self.warehouse:
             with Transaction().set_context(
-                locations=[self.sale.warehouse.id],
+                locations=[self.warehouse.id],  # warehouse of the line
                 stock_skip_warehouse=True,
                 stock_date_end=Date.today(),
                 stock_assign=True
