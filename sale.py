@@ -36,21 +36,47 @@ class SaleLine:
         fields.Char('Sale State'), 'get_sale_state'
     )
 
-    @fields.depends('_parent_sale.warehouse', 'product', 'type')
+    @fields.depends(
+        '_parent_sale.warehouse', '_parent_sale.sale_date',
+        'product', 'type')
     def on_change_with_available_stock_qty(self, name=None):
         """
         Returns the available stock to process a Sale
         """
+        Location = Pool().get('stock.location')
         Date = Pool().get('ir.date')
 
-        if self.type == 'line' and self.product and self.sale.warehouse:
+        try:
+            self.warehouse
+        except AttributeError:
+            # On change will not have the warehouse set since its constructed
+            # from a dictionary of changes rather than the database active
+            # record. The warehouse on line is never displayed on view and
+            # won't be there.
+            self.warehouse = Location(self.get_warehouse(None))
+
+        # If a date is specified on sale, use that. If not, use the
+        # current date.
+        date = self.sale.sale_date or Date.today()
+
+        # If the sales person is taking an order for a date in the past
+        # (which tryton allows), the stock cannot be of the past, but of
+        # the current date.
+        date = max(date, Date.today())
+
+        if self.type == 'line' and self.product and self.warehouse:
             with Transaction().set_context(
-                locations=[self.sale.warehouse.id],
-                stock_skip_warehouse=True,
-                stock_date_end=Date.today(),
-                stock_assign=True
-            ):
-                return self.product.quantity
+                    locations=[self.warehouse.id],  # warehouse of the line
+                    stock_skip_warehouse=True,      # quantity of storage only
+                    stock_date_end=date,            # Stock as of sale date
+                    stock_assign=True):             # Exclude Assigned
+                if date <= Date.today():
+                    return self.product.quantity
+                else:
+                    # For a sale in the future, it is more interesting to
+                    # see the forecasted quantity rather than what is
+                    # currently in the warehouse.
+                    return self.product.forecast_quantity
 
     def get_sale_state(self, name):
         """
