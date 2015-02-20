@@ -107,7 +107,7 @@ setup(
     author="Openlabs Technologies and Consulting (P) Ltd.",
     author_email='info@openlabs.co.in',
     url='http://www.openlabs.co.in/',
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
     package_dir={'trytond.modules.%s' % MODULE: '.'},
     packages=[
         'trytond.modules.%s' % MODULE,
